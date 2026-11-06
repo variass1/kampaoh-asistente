@@ -246,6 +246,8 @@
   // 1) Voz realista del servidor (ElevenLabs).  2) Si no hay, la mejor voz en español del navegador.
   const synth = window.speechSynthesis;
   const audio = new Audio();
+  audio.setAttribute("playsinline", "");
+  audio.preload = "auto";
   let audioUrl = null;
   function bestBrowserVoice() {
     const vs = (synth ? synth.getVoices() : []).filter((v) => /^es/i.test(v.lang));
@@ -259,31 +261,62 @@
     audio.pause();
     micBtn.classList.remove("speaking");
   }
+  // Los móviles (sobre todo iPhone) solo dejan sonar audio iniciado por un toque del usuario.
+  // En el primer toque "desbloqueamos" el reproductor y la voz del navegador para poder hablar después.
+  let audioDesbloqueado = false;
+  const SILENCIO = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+  function desbloquearAudio() {
+    if (audioDesbloqueado) return;
+    audioDesbloqueado = true;
+    try {
+      audio.src = SILENCIO;
+      const p = audio.play();
+      if (p && p.then) p.then(() => audio.pause()).catch(() => { audioDesbloqueado = false; });
+    } catch { audioDesbloqueado = false; }
+    try {
+      if (synth) { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; synth.speak(u); }
+    } catch {}
+  }
+  ["pointerdown", "touchend", "click", "keydown"].forEach((ev) => root.addEventListener(ev, desbloquearAudio, { passive: true }));
+
+  const hablarNavegador = (text) =>
+    new Promise((res) => {
+      if (!synth) return res();
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(paraVoz(text));
+      u.lang = "es-ES";
+      const v = bestBrowserVoice();
+      if (v) u.voice = v;
+      u.rate = 1.03;
+      u.onend = u.onerror = res;
+      synth.speak(u);
+      // Chrome en Android a veces se queda "pausado": lo despertamos
+      setTimeout(() => { try { synth.resume(); } catch {} }, 250);
+    });
+
   async function speak(text) {
     if (!speakReplies || !text) return;
     stopSpeaking();
     micBtn.classList.add("speaking");
     status.textContent = "Kampi está hablando…";
     try {
+      let hecho = false;
       if (serverTTS) {
-        const r = await fetch(API + "/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
-        if (!r.ok) throw new Error("tts");
-        if (audioUrl) URL.revokeObjectURL(audioUrl);
-        audioUrl = URL.createObjectURL(await r.blob());
-        audio.src = audioUrl;
-        await audio.play();
-        await new Promise((res) => { audio.onended = audio.onerror = audio.onpause = res; });
-      } else if (synth) {
-        await new Promise((res) => {
-          const u = new SpeechSynthesisUtterance(paraVoz(text));
-          u.lang = "es-ES";
-          const v = bestBrowserVoice();
-          if (v) u.voice = v;
-          u.rate = 1.03;
-          u.onend = u.onerror = res;
-          synth.speak(u);
-        });
+        try {
+          const r = await fetch(API + "/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+          if (!r.ok) throw new Error("tts " + r.status);
+          if (audioUrl) URL.revokeObjectURL(audioUrl);
+          audioUrl = URL.createObjectURL(await r.blob());
+          audio.src = audioUrl;
+          await audio.play();
+          hecho = true;
+          await new Promise((res) => { audio.onended = audio.onerror = audio.onpause = res; });
+        } catch (e) {
+          if (hecho) throw e;
+          console.warn("Voz natural no disponible, uso la del navegador:", e.message);
+        }
       }
+      if (!hecho) await hablarNavegador(text); // si falla la voz natural (sin saldo, límite, bloqueo), habla el navegador
     } catch {}
     micBtn.classList.remove("speaking");
     status.textContent = idleStatus;
@@ -351,6 +384,7 @@
     busy = true;
     input.value = "";
     add("kmp-msg kmp-user", esc(text));
+    $(".kmp-chips").style.display = "none"; // tras el primer mensaje, las sugerencias sobran
     const typing = add("kmp-typing", "Kampi está escribiendo…");
     try {
       const r = await fetch(API + "/api/chat", {
