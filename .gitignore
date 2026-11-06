@@ -1,0 +1,13 @@
+# Claves (nunca subir)
+.env
+.env.*
+!.env.example
+
+# Conversaciones guardadas de los clientes
+data/
+
+# Audios de prueba
+muestras-voz/
+
+node_modules/
+.DS_Store
