@@ -303,7 +303,9 @@ http
       }
       if (req.url === "/api/info") {
         res.writeHead(200, { "content-type": "application/json" });
-        return res.end(JSON.stringify({ mode: API_KEY && iaEstado !== "sin_saldo" && iaEstado !== "error" ? "ia" : "demo", ia: iaEstado, model: API_KEY ? MODEL : null, tts: ELEVEN_KEY ? "elevenlabs" : "browser" }));
+        let destino = null;
+        try { const dd = await getDestino(); destino = { nombre: dd.nombre, foto: dd.foto, fotos: dd.fotos.slice(0, 6) }; } catch {}
+        return res.end(JSON.stringify({ mode: API_KEY && iaEstado !== "sin_saldo" && iaEstado !== "error" ? "ia" : "demo", ia: iaEstado, model: API_KEY ? MODEL : null, tts: ELEVEN_KEY ? "elevenlabs" : "browser", destino }));
       }
       if (req.method === "POST" && req.url === "/api/tts") {
         let raw = "";

@@ -26,7 +26,7 @@ export async function getDestino() {
   if (cache.data && Date.now() - cache.at < 3600_000) return cache.data;
   const qs = (o) => Object.entries(o).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
   const [camp, tents] = await Promise.all([
-    getJSON(`${CMS}/campings/${DEST.cmsId}?${qs({ locale: "es", "populate[description]": "*", "populate[condition]": "*", "populate[features][fields][0]": "name" })}`),
+    getJSON(`${CMS}/campings/${DEST.cmsId}?${qs({ locale: "es", "populate[description]": "*", "populate[condition]": "*", "populate[features][fields][0]": "name", "populate[featuredImage][fields][0]": "url", "populate[featuredImage][fields][1]": "formats", "populate[photos][fields][0]": "url", "populate[photos][fields][1]": "formats" })}`),
     getJSON(
       `${CMS}/tents?${qs({
         "filters[camping][id][$eq]": DEST.cmsId,
@@ -69,6 +69,8 @@ export async function getDestino() {
     at: Date.now(),
     data: {
       nombre: c.propertyName,
+      foto: img(c.featuredImage?.formats?.large?.url || c.featuredImage?.url),
+      fotos: (c.photos || []).map((p) => img(p.formats?.large?.url || p.url)).filter(Boolean),
       camping: c.campingName,
       ubicacion: c.location,
       coordenadas: [c.latitude, c.longitude],
