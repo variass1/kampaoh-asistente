@@ -140,13 +140,21 @@
   .kmp-cta:hover{background:#1d1d1d}
 
   /* --- entrada --- */
-  .kmp-form{display:flex;gap:8px;padding:10px 12px;padding-bottom:max(10px,env(safe-area-inset-bottom));background:#fff;align-items:center;border-top:1px solid var(--line)}
-  .kmp-form input{flex:1;min-width:0;border:1.5px solid var(--line);background:var(--soft);border-radius:999px;padding:12px 16px;font-size:16px;outline:none;transition:border-color .15s,background .15s}
-  .kmp-form input:focus{border-color:var(--k);background:#fff}
+  .kmp-form{display:flex;gap:10px;padding:12px 14px;padding-bottom:max(12px,env(safe-area-inset-bottom));background:#fff;align-items:center;box-shadow:0 -10px 30px rgba(0,0,0,.07);position:relative;z-index:2}
+  .kmp-field{flex:1;min-width:0;display:flex;align-items:center;gap:8px;border:2px solid #d6d2c9;background:#fff;border-radius:999px;padding:0 6px 0 16px;height:54px;transition:border-color .2s,box-shadow .2s}
+  .kmp-field svg{flex:none;color:#8d8980}
+  .kmp-field:focus-within{border-color:var(--k)}
+  .kmp-form input{flex:1;min-width:0;border:0;background:transparent;font-size:16px;outline:none;color:var(--text);height:100%}
+  .kmp-form input::placeholder{color:#6f6b63}
+  .kmp-inicio .kmp-field{border-color:var(--k);box-shadow:0 0 0 5px rgba(255,209,0,.45)}
+  .kmp-form .kmp-send{display:none}
+  .kmp-form.con-texto .kmp-send{display:grid}
+  .kmp-form.con-texto .kmp-mic{display:none}
   .kmp-btn{width:46px;height:46px;border-radius:50%;border:0;display:grid;place-items:center;flex:none;transition:transform .15s}
   .kmp-btn:active{transform:scale(.92)}
   .kmp-send{background:var(--k);color:var(--y)}
-  .kmp-mic{background:var(--y);color:var(--k);width:50px;height:50px}
+  .kmp-mic{background:var(--y);color:var(--k);width:54px;height:54px;box-shadow:0 6px 16px rgba(255,209,0,.5)}
+  .kmp-send{width:54px;height:54px}
   .kmp-foot{font-size:10.5px;color:#9a978f;text-align:center;padding:0 0 8px;background:#fff}
 
   /* --- modo voz --- */
@@ -202,7 +210,8 @@
   const icon = {
     chat: svg('<path d="M3 20l1.5-4.5A8 8 0 1 1 8 19.5L3 20z"/>', 28),
     mic: svg('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>', 22),
-    send: svg('<path d="M4 12h15M13 6l6 6-6 6"/>', 18),
+    send: svg('<path d="M4 12h15M13 6l6 6-6 6"/>', 20),
+    pen: svg('<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/>', 18),
     cal: svg('<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>', 18),
     tent: svg('<path d="M12 3L2 21h20L12 3z"/><path d="M12 3l4 18M12 3L8 21"/>', 18),
     car: svg('<path d="M5 16l1.5-5a2 2 0 0 1 2-1.5h7a2 2 0 0 1 2 1.5L19 16"/><rect x="3" y="15" width="18" height="4" rx="1.5"/><circle cx="7" cy="19.5" r="1.5"/><circle cx="17" cy="19.5" r="1.5"/>', 18),
@@ -230,7 +239,7 @@
       </div>
       <div class="kmp-msgs" aria-live="polite"></div>
       <form class="kmp-form">
-        <input placeholder="Escribe o pulsa el micro…" aria-label="Mensaje" enterkeyhint="send" autocomplete="off" />
+        <label class="kmp-field">${icon.pen}<input placeholder="Pregúntame lo que quieras…" aria-label="Escribe tu pregunta" enterkeyhint="send" autocomplete="off" /></label>
         <button class="kmp-btn kmp-send" aria-label="Enviar">${icon.send}</button>
         <button type="button" class="kmp-btn kmp-mic" aria-label="Hablar">${icon.mic}</button>
       </form>
@@ -246,6 +255,7 @@
   document.body.appendChild(root);
 
   const $ = (s) => root.querySelector(s);
+  root.classList.add("kmp-inicio"); // la caja de escribir se resalta en la pantalla de bienvenida
   const msgs = $(".kmp-msgs"), input = $("input"), micBtn = $(".kmp-mic"), voiceBtn = $(".kmp-voice-toggle"), status = $(".kmp-status");
   const voiceUI = $(".kmp-voice"), voiceLabel = $(".kmp-voice-label"), voiceText = $(".kmp-voice-text");
   const idleStatus = status.textContent;
@@ -361,7 +371,7 @@
         <button class="kmp-action" data-send="¿Tiene parking?"><span>${icon.car}</span>¿Tiene parking?</button>
         <button class="kmp-action" data-send="¿Qué hay en el camping?" style="grid-column:1/-1;flex-direction:row;align-items:center"><span>${icon.tree}</span>¿Qué hay en el camping?</button>
       </div>
-      <div class="kmp-welcome-tip">Pulsa el micro amarillo para hablar con Kampi</div>`);
+      <div class="kmp-welcome-tip">Escribe abajo o pulsa el micro amarillo para hablar</div>`);
   }
   // Al empezar la conversación, la bienvenida se recoge para dejar sitio
   function recogerBienvenida() {
@@ -664,6 +674,8 @@
     if (!text || busy) return;
     busy = true;
     input.value = "";
+    marcarTexto();
+    root.classList.remove("kmp-inicio");
     recogerBienvenida();
     add("kmp-msg kmp-user", esc(text));
     const typing = add("kmp-row", `<div class="kmp-ava kmp-ava-sm">${icon.kampi}</div><div class="kmp-msg kmp-bot kmp-dots"><i></i><i></i><i></i></div>`);
@@ -692,6 +704,9 @@
     }
   }
 
+  const formEl = $(".kmp-form");
+  const marcarTexto = () => formEl.classList.toggle("con-texto", input.value.trim().length > 0);
+  input.addEventListener("input", marcarTexto);
   $(".kmp-form").onsubmit = (e) => { e.preventDefault(); conversationMode = false; estadoVoz(null); send(input.value); };
 
   // ---------- Checkout oficial de Kampaoh dentro del asistente ----------
