@@ -29,7 +29,7 @@
   .kmp-panel{background:#fff;display:none;flex-direction:column;overflow:hidden;position:relative}
   .kmp-float .kmp-panel{position:absolute;right:0;bottom:80px;width:400px;max-width:calc(100vw - 32px);height:680px;max-height:calc(100vh - 120px);border-radius:24px;box-shadow:0 24px 70px rgba(0,0,0,.35)}
   .kmp-open .kmp-panel,.kmp-full .kmp-panel{display:flex}
-  .kmp-full{position:fixed;inset:0;height:var(--kmp-vh,100dvh);background:var(--k);display:flex;justify-content:center;overflow:hidden}
+  .kmp-full{position:fixed;left:0;right:0;top:var(--kmp-top,0px);height:var(--kmp-vh,100dvh);background:var(--k);display:flex;justify-content:center;overflow:hidden}
   .kmp-full::before{content:"";position:absolute;inset:-40px;background:var(--kmp-bg) center/cover no-repeat;filter:blur(28px) brightness(.45) saturate(1.1);transform:scale(1.05);opacity:0;transition:opacity .8s}
   .kmp-full.kmp-hasbg::before{opacity:1}
   .kmp-full .kmp-panel{width:100%;max-width:780px;height:100%;z-index:1}
@@ -38,9 +38,9 @@
   /* --- cabecera --- */
   .kmp-head{background:var(--k);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px;padding-top:max(12px,env(safe-area-inset-top))}
   .kmp-ava{width:40px;height:40px;border-radius:50%;background:var(--y);display:grid;place-items:center;flex:none}
-  .kmp-ava svg{width:22px;height:22px}
+  .kmp-ava svg{width:26px;height:26px}
   .kmp-ava-sm{width:28px;height:28px}
-  .kmp-ava-sm svg{width:15px;height:15px}
+  .kmp-ava-sm svg{width:18px;height:18px}
   .kmp-who{line-height:1.2;min-width:0}
   .kmp-who b{font-size:15px;display:block}
   .kmp-who small{font-size:12px;color:#c9c7c0;display:flex;align-items:center;gap:6px}
@@ -164,6 +164,9 @@
   @keyframes kmp-ring{0%{transform:scale(.8);opacity:.5}100%{transform:scale(1.6);opacity:0}}
   @keyframes kmp-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
   @keyframes kmp-spin{to{transform:rotate(1turn)}}
+  .kmp-voice.toca .kmp-orb{cursor:pointer}
+  .kmp-voice.toca .kmp-orb b{animation:kmp-breathe 1.6s ease-in-out infinite}
+  .kmp-voice.toca .kmp-orb i{animation:kmp-ring 2s infinite}
   .kmp-voice-label{font-weight:700;font-size:15px}
   .kmp-voice-text{font-size:14px;color:var(--muted);text-align:center;min-height:20px;max-width:90%}
   .kmp-voice-stop{background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:9px 18px;font-size:13.5px;font-weight:600}
@@ -187,6 +190,10 @@
   .kmp-gal-dots{display:flex;gap:6px;overflow-x:auto;padding:10px 14px max(12px,env(safe-area-inset-bottom))}
   .kmp-gal-dots img{width:56px;height:42px;object-fit:cover;border-radius:6px;opacity:.45;cursor:pointer;flex:none}
   .kmp-gal-dots img.on{opacity:1;outline:2px solid var(--y)}
+  .kmp-kb .kmp-foot{display:none}
+  .kmp-kb .kmp-hero{height:110px;padding:12px 16px}
+  .kmp-kb .kmp-hero p,.kmp-kb .kmp-welcome-tip{display:none}
+  .kmp-kb .kmp-hero h2{font-size:19px}
   @media (prefers-reduced-motion: reduce){.kmp-root *{animation:none!important;transition:none!important}}
   `;
 
@@ -201,7 +208,8 @@
     car: svg('<path d="M5 16l1.5-5a2 2 0 0 1 2-1.5h7a2 2 0 0 1 2 1.5L19 16"/><rect x="3" y="15" width="18" height="4" rx="1.5"/><circle cx="7" cy="19.5" r="1.5"/><circle cx="17" cy="19.5" r="1.5"/>', 18),
     tree: svg('<path d="M12 2l5 7h-3l4 6H6l4-6H7l5-7z"/><path d="M12 15v7"/>', 18),
     // marca de Kampi: dos "picos" como en el logo de Kampaoh
-    kampi: '<svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l8-7 8 7"/><path d="M7 18l5-4.5 5 4.5"/></svg>',
+    // Símbolo de Kampaoh (redibujado en vector a partir del logo): pico, onda y rombo
+    kampi: '<svg viewBox="0 0 100 100" fill="none" stroke="#000" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"><path d="M23 45L50 18L77 45"/><path d="M8 57L21 69L50 43L79 69L92 57"/><path d="M50 69L58 77L50 85L42 77Z" fill="#000" stroke-width="6"/></svg>',
   };
 
   const style = document.createElement("style");
@@ -392,12 +400,14 @@
 
   // ---------- Panel de voz (círculo animado) ----------
   function estadoVoz(modo, texto = "") {
-    voiceUI.classList.remove("escucha", "habla", "piensa");
+    voiceUI.classList.remove("escucha", "habla", "piensa", "toca");
     if (!modo || !conversationMode) { voiceUI.classList.remove("on"); return; }
     voiceUI.classList.add("on", modo);
-    voiceLabel.textContent = modo === "escucha" ? "Te escucho…" : modo === "habla" ? "Kampi está hablando…" : "Pensando…";
+    voiceLabel.textContent = { escucha: "Te escucho…", habla: "Kampi está hablando…", piensa: "Pensando…", toca: "Toca el círculo para hablar" }[modo];
     voiceText.textContent = texto;
   }
+  // Tocar el círculo (cuando invita a hablar) arranca el micrófono: en iPhone hace falta un toque
+  $(".kmp-orb").addEventListener("click", () => { if (voiceUI.classList.contains("toca")) startListening(); });
   $(".kmp-voice-stop").onclick = () => { conversationMode = false; stopSpeaking(); stopListening(); estadoVoz(null); };
 
   // ---------- Voz: salida ----------
@@ -480,44 +490,70 @@
 
   // ---------- Voz: entrada (dictado) ----------
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let rec = null, listening = false;
-  if (SR) {
-    rec = new SR();
-    rec.lang = "es-ES";
-    rec.interimResults = true;
-    rec.continuous = false;
-    rec.onresult = (e) => {
-      const r = [...e.results].map((x) => x[0].transcript).join("");
-      input.value = r;
-      voiceText.textContent = r;
-      if (e.results[e.results.length - 1].isFinal) { stopListening(); send(r); }
-    };
-    rec.onerror = (e) => {
-      stopListening();
-      conversationMode = false;
-      estadoVoz(null);
-      if (e.error === "not-allowed") add("kmp-note", "Para hablar, permite el uso del micrófono en el navegador.");
-    };
-    rec.onend = () => { if (listening) { stopListening(); if (!busy) estadoVoz(null); } };
-  } else {
+  // iPhone/iPad (Safari y Chrome usan WebKit): el micrófono solo arranca tras un toque del usuario
+  const esIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  let rec = null, listening = false, arrancado = false, vigia = null;
+  if (!SR) {
     micBtn.title = "Tu navegador no permite dictado por voz (prueba Chrome, Edge o Safari)";
     micBtn.style.opacity = 0.4;
   }
+  function crearRec() {
+    const r = new SR();
+    r.lang = "es-ES";
+    r.interimResults = true;
+    r.continuous = false;
+    r.onaudiostart = r.onstart = () => { arrancado = true; };
+    r.onresult = (e) => {
+      const t = [...e.results].map((x) => x[0].transcript).join("");
+      input.value = t;
+      voiceText.textContent = t;
+      if (e.results[e.results.length - 1].isFinal) { stopListening(); send(t); }
+    };
+    r.onerror = (e) => {
+      stopListening();
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        if (conversationMode && esIOS) return estadoVoz("toca"); // sin toque previo: pedimos que toque
+        conversationMode = false;
+        estadoVoz(null);
+        return add("kmp-note", "Para hablar, permite el uso del micrófono en el navegador.");
+      }
+      if (conversationMode) estadoVoz("toca"); // no se oyó nada, etc.: invitamos a volver a intentarlo
+    };
+    r.onend = () => {
+      if (!listening) return;
+      stopListening();
+      if (!busy && conversationMode) estadoVoz("toca");
+    };
+    return r;
+  }
   function startListening() {
-    if (!rec || listening) return;
+    if (!SR || listening) return;
     stopSpeaking();
+    try { rec && rec.abort(); } catch {}
+    rec = crearRec();
     listening = true;
+    arrancado = false;
     status.textContent = "Escuchando…";
     estadoVoz("escucha");
-    try { rec.start(); } catch {}
+    try { rec.start(); } catch { listening = false; return estadoVoz("toca"); }
+    // Si el navegador no arranca el micro en 2,5 s (bloqueo silencioso), pedimos un toque
+    clearTimeout(vigia);
+    vigia = setTimeout(() => { if (listening && !arrancado) { stopListening(); estadoVoz("toca"); } }, 2500);
   }
   function stopListening() {
     listening = false;
+    clearTimeout(vigia);
     status.textContent = idleStatus;
-    try { rec.stop(); } catch {}
+    try { rec && rec.stop(); } catch {}
+  }
+  // Tras hablar Kampi: en iPhone invitamos a tocar; en el resto volvemos a escuchar solos
+  function seguirConversacion() {
+    if (!conversationMode) return estadoVoz(null);
+    if (esIOS) estadoVoz("toca");
+    else startListening();
   }
   micBtn.onclick = () => {
-    if (!rec) return;
+    if (!SR) return;
     conversationMode = true; // escucha → responde en voz alta → vuelve a escuchar
     if (!speakReplies) toggleVoice(true);
     startListening();
@@ -555,7 +591,7 @@
       addBot(esc(r.text || "Perdona, no te he entendido."));
       busy = false;
       await speak(r.text || "");
-      if (conversationMode && !(r.events || []).some((e) => e.type === "preparar_reserva")) startListening();
+      if (conversationMode && !(r.events || []).some((e) => e.type === "preparar_reserva")) seguirConversacion();
       else estadoVoz(null);
     } catch {
       typing.remove();
@@ -634,11 +670,21 @@
   };
 
   // ---------- Móvil: que el teclado no tape la caja de escribir ----------
+  // iOS, al abrir el teclado, desplaza la página: colocamos el chat justo en la zona visible
   if (FULL && window.visualViewport) {
-    const ajustar = () => root.style.setProperty("--kmp-vh", window.visualViewport.height + "px");
-    window.visualViewport.addEventListener("resize", ajustar);
+    const vv = window.visualViewport;
+    const ajustar = () => {
+      root.style.setProperty("--kmp-vh", vv.height + "px");
+      root.style.setProperty("--kmp-top", vv.offsetTop + "px");
+      root.classList.toggle("kmp-kb", vv.height < window.innerHeight * 0.8); // teclado abierto
+      scrollAbajo();
+    };
+    vv.addEventListener("resize", ajustar);
+    vv.addEventListener("scroll", ajustar);
+    window.addEventListener("orientationchange", () => setTimeout(ajustar, 300));
     ajustar();
-    input.addEventListener("focus", () => setTimeout(scrollAbajo, 300));
+    input.addEventListener("focus", () => { setTimeout(ajustar, 50); setTimeout(ajustar, 350); });
+    input.addEventListener("blur", () => setTimeout(() => { window.scrollTo(0, 0); ajustar(); }, 50));
   }
 
   const toggle = (open) => {
