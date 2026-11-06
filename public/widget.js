@@ -19,6 +19,8 @@
   .kmp-root{--y:#FFD100;--k:#000;--k2:#141414;--soft:#F4F4F1;--line:#E6E6E1;--muted:#6B6B66;--text:#111;
     font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--text);z-index:99999}
   .kmp-root *{box-sizing:border-box}
+  .kmp-root button,.kmp-root input,.kmp-root a{touch-action:manipulation}
+  .kmp-full{height:100dvh}
   .kmp-float{position:fixed;right:20px;bottom:20px}
   .kmp-fab{width:64px;height:64px;border-radius:50%;border:0;background:var(--y);color:var(--k);cursor:pointer;
     box-shadow:0 8px 24px rgba(0,0,0,.3);display:grid;place-items:center;transition:transform .15s}
@@ -90,7 +92,7 @@
   .kmp-chips button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 12px;font-size:13px;cursor:pointer}
   .kmp-chips button:hover{border-color:var(--k)}
   .kmp-form{display:flex;gap:8px;padding:12px 14px;background:#fff;align-items:center}
-  .kmp-form input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:999px;padding:12px 16px;font-size:15px;outline:none}
+  .kmp-form input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:999px;padding:12px 16px;font-size:16px;outline:none}
   .kmp-form input:focus{border-color:var(--k)}
   .kmp-btn{width:46px;height:46px;border-radius:50%;border:0;cursor:pointer;display:grid;place-items:center;flex:none}
   .kmp-send{background:var(--k);color:var(--y)}
