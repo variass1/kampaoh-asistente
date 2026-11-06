@@ -314,6 +314,7 @@ http
         return res.end(audio);
       }
       let path = req.url.split("?")[0];
+      if (path === "/favicon.ico") { res.writeHead(204); return res.end(); }
       if (path === "/") path = "/index.html";
       if (path.includes("..")) throw new Error("bad path");
       const file = await readFile(join(PUBLIC, path));
