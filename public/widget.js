@@ -407,7 +407,7 @@
     voiceText.textContent = texto;
   }
   // Tocar el círculo (cuando invita a hablar) arranca el micrófono: en iPhone hace falta un toque
-  $(".kmp-orb").addEventListener("click", () => { if (voiceUI.classList.contains("toca")) startListening(); });
+  $(".kmp-orb").addEventListener("click", () => { if (voiceUI.classList.contains("toca") || !listening) { conversationMode = true; startListening(); } });
   $(".kmp-voice-stop").onclick = () => { conversationMode = false; stopSpeaking(); stopListening(); estadoVoz(null); };
 
   // ---------- Voz: salida ----------
@@ -502,8 +502,10 @@
     r.lang = "es-ES";
     r.interimResults = true;
     r.continuous = false;
-    r.onaudiostart = r.onstart = () => { arrancado = true; };
+    r.onaudiostart = r.onstart = r.onsoundstart = r.onspeechstart = () => { arrancado = true; };
+    r.onnomatch = () => { if (conversationMode) estadoVoz("toca"); };
     r.onresult = (e) => {
+      arrancado = true;
       const t = [...e.results].map((x) => x[0].transcript).join("");
       input.value = t;
       voiceText.textContent = t;
@@ -526,9 +528,13 @@
     };
     return r;
   }
+  function soltarAudio() {
+    stopSpeaking();
+    try { audio.removeAttribute("src"); audio.load(); } catch {}
+  }
   function startListening() {
     if (!SR || listening) return;
-    stopSpeaking();
+    soltarAudio();
     try { rec && rec.abort(); } catch {}
     rec = crearRec();
     listening = true;
@@ -536,9 +542,9 @@
     status.textContent = "Escuchando…";
     estadoVoz("escucha");
     try { rec.start(); } catch { listening = false; return estadoVoz("toca"); }
-    // Si el navegador no arranca el micro en 2,5 s (bloqueo silencioso), pedimos un toque
+    // Si en 8 s no hay ni rastro del micro (bloqueo silencioso), pedimos un toque. Antes eran 2,5 s: demasiado poco para iPhone
     clearTimeout(vigia);
-    vigia = setTimeout(() => { if (listening && !arrancado) { stopListening(); estadoVoz("toca"); } }, 2500);
+    vigia = setTimeout(() => { if (listening && !arrancado) { stopListening(); estadoVoz("toca"); } }, 8000);
   }
   function stopListening() {
     listening = false;
@@ -550,7 +556,7 @@
   function seguirConversacion() {
     if (!conversationMode) return estadoVoz(null);
     if (esIOS) estadoVoz("toca");
-    else startListening();
+    else { soltarAudio(); setTimeout(startListening, 350); }
   }
   micBtn.onclick = () => {
     if (!SR) return;
