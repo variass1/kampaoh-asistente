@@ -251,7 +251,7 @@
   const idleStatus = status.textContent;
   // Voz activada por defecto; el usuario puede quitarla con el botón "Voz" (se recuerda en este navegador)
   let speakReplies = (() => { try { return localStorage.getItem("kmp-voz") !== "off"; } catch { return true; } })();
-  let busy = false, conversationMode = false, serverTTS = false;
+  let busy = false, conversationMode = false, serverTTS = false, serverSTT = false;
 
   const scrollAbajo = () => requestAnimationFrame(() => (msgs.scrollTop = msgs.scrollHeight));
   const add = (cls, html) => {
@@ -430,7 +430,7 @@
   }
   // Los móviles (sobre todo iPhone) solo dejan sonar audio iniciado por un toque del usuario.
   // En el primer toque "desbloqueamos" el reproductor y la voz del navegador para poder hablar después.
-  let audioDesbloqueado = false;
+  let audioDesbloqueado = false, actx = null;
   const SILENCIO = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
   function desbloquearAudio() {
     if (audioDesbloqueado) return;
@@ -443,6 +443,7 @@
     try {
       if (synth) { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; synth.speak(u); }
     } catch {}
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch {}
   }
   ["pointerdown", "touchend", "click", "keydown"].forEach((ev) => root.addEventListener(ev, desbloquearAudio, { passive: true }));
 
@@ -493,7 +494,7 @@
   // iPhone/iPad (Safari y Chrome usan WebKit): el micrófono solo arranca tras un toque del usuario
   const esIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   let rec = null, listening = false, arrancado = false, vigia = null;
-  if (!SR) {
+  if (!SR && !(navigator.mediaDevices && window.MediaRecorder)) {
     micBtn.title = "Tu navegador no permite dictado por voz (prueba Chrome, Edge o Safari)";
     micBtn.style.opacity = 0.4;
   }
@@ -519,6 +520,7 @@
         estadoVoz(null);
         return add("kmp-note", "Para hablar, permite el uso del micrófono en el navegador.");
       }
+      fallosDictado++;
       if (conversationMode) estadoVoz("toca"); // no se oyó nada, etc.: invitamos a volver a intentarlo
     };
     r.onend = () => {
@@ -528,12 +530,93 @@
     };
     return r;
   }
+  // ---------- Voz por grabación (iPhone): graba, detecta silencio y transcribe en el servidor ----------
+  // El dictado de Safari en iPhone deja de funcionar tras la primera vez; grabar y transcribir sí funciona siempre.
+  const usarGrabacion = () => serverSTT && (esIOS || !SR || fallosDictado >= 2);
+  let fallosDictado = 0, grabando = null;
+  function cortarGrabacion() {
+    if (!grabando) return;
+    const g = grabando;
+    grabando = null;
+    clearInterval(g.t);
+    try { if (g.mr.state !== "inactive") g.mr.stop(); } catch {}
+  }
+  async function grabar() {
+    soltarAudio();
+    listening = true;
+    status.textContent = "Escuchando…";
+    estadoVoz("escucha");
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    } catch (e) {
+      listening = false;
+      status.textContent = idleStatus;
+      if (e && e.name === "NotAllowedError" && !conversationMode) add("kmp-note", "Para hablar, permite el uso del micrófono en el navegador.");
+      return estadoVoz(conversationMode ? "toca" : null);
+    }
+    const tipo = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac"].find((t) => MediaRecorder.isTypeSupported(t)) || "";
+    const mr = new MediaRecorder(stream, tipo ? { mimeType: tipo } : undefined);
+    const trozos = [];
+    mr.ondataavailable = (e) => e.data && e.data.size && trozos.push(e.data);
+    // Medimos el volumen para saber cuándo empiezas y terminas de hablar
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); await actx.resume(); } catch {}
+    let analizador = null;
+    if (actx) {
+      try { analizador = actx.createAnalyser(); analizador.fftSize = 1024; actx.createMediaStreamSource(stream).connect(analizador); } catch { analizador = null; }
+    }
+    const datos = new Uint8Array(1024);
+    const inicio = Date.now();
+    let hablado = false, ultimoSonido = Date.now(), base = null;
+    const g = { mr, t: null };
+    grabando = g;
+    g.t = setInterval(() => {
+      const ahora = Date.now();
+      if (analizador) {
+        analizador.getByteTimeDomainData(datos);
+        let suma = 0;
+        for (const v of datos) suma += (v - 128) * (v - 128);
+        const nivel = Math.sqrt(suma / datos.length);
+        if (base === null && ahora - inicio > 250) base = nivel;
+        const umbral = Math.max(4, (base || 2) * 2.2);
+        if (nivel > umbral) { ultimoSonido = ahora; if (!hablado) { hablado = true; voiceText.textContent = "…"; } }
+        if (hablado && ahora - ultimoSonido > 1300) return cortarGrabacion(); // 1,3 s de silencio: has terminado
+        if (!hablado && ahora - inicio > 9000) { g.vacio = true; return cortarGrabacion(); } // nadie habla
+      } else if (ahora - inicio > 6000) return cortarGrabacion(); // sin medidor: grabamos 6 s
+      if (ahora - inicio > 20000) cortarGrabacion(); // máximo 20 s
+    }, 100);
+    mr.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop()); // apagamos el micro: así Kampi se oye por el altavoz
+      listening = false;
+      status.textContent = idleStatus;
+      if (g.cancelado) return;
+      if (g.vacio || !trozos.length) return estadoVoz(conversationMode ? "toca" : null);
+      estadoVoz("piensa", "Transcribiendo…");
+      try {
+        const blob = new Blob(trozos, { type: mr.mimeType || tipo || "audio/webm" });
+        const r = await fetch(API + "/api/stt", { method: "POST", headers: { "content-type": blob.type }, body: blob });
+        if (!r.ok) throw new Error("stt " + r.status);
+        const { text } = await r.json();
+        if (!text) return estadoVoz(conversationMode ? "toca" : null, "No te he entendido, ¿lo repites?");
+        input.value = text;
+        send(text);
+      } catch (e) {
+        console.warn("Transcripción no disponible:", e.message);
+        serverSTT = false; // volvemos al dictado del navegador
+        estadoVoz(conversationMode ? "toca" : null, "No he podido oírte bien, ¿lo intentas otra vez?");
+      }
+    };
+    mr.start(250);
+  }
+
   function soltarAudio() {
     stopSpeaking();
     try { audio.removeAttribute("src"); audio.load(); } catch {}
   }
   function startListening() {
-    if (!SR || listening) return;
+    if (listening) return;
+    if (usarGrabacion()) return grabar();
+    if (!SR) return;
     soltarAudio();
     try { rec && rec.abort(); } catch {}
     rec = crearRec();
@@ -544,9 +627,10 @@
     try { rec.start(); } catch { listening = false; return estadoVoz("toca"); }
     // Si en 8 s no hay ni rastro del micro (bloqueo silencioso), pedimos un toque. Antes eran 2,5 s: demasiado poco para iPhone
     clearTimeout(vigia);
-    vigia = setTimeout(() => { if (listening && !arrancado) { stopListening(); estadoVoz("toca"); } }, 8000);
+    vigia = setTimeout(() => { if (listening && !arrancado) { fallosDictado++; stopListening(); estadoVoz("toca"); } }, 8000);
   }
   function stopListening() {
+    if (grabando) { grabando.cancelado = true; cortarGrabacion(); }
     listening = false;
     clearTimeout(vigia);
     status.textContent = idleStatus;
@@ -555,11 +639,11 @@
   // Tras hablar Kampi: en iPhone invitamos a tocar; en el resto volvemos a escuchar solos
   function seguirConversacion() {
     if (!conversationMode) return estadoVoz(null);
-    if (esIOS) estadoVoz("toca");
-    else { soltarAudio(); setTimeout(startListening, 350); }
+    if (esIOS && !usarGrabacion()) estadoVoz("toca");
+    else { soltarAudio(); setTimeout(startListening, 400); }
   }
   micBtn.onclick = () => {
-    if (!SR) return;
+    if (!SR && !serverSTT) return;
     conversationMode = true; // escucha → responde en voz alta → vuelve a escuchar
     if (!speakReplies) toggleVoice(true);
     startListening();
@@ -706,6 +790,7 @@
 
   fetch(API + "/api/info").then((r) => r.json()).then((i) => {
     serverTTS = i.tts === "elevenlabs";
+    serverSTT = i.stt === "elevenlabs" && !!(navigator.mediaDevices && window.MediaRecorder);
     $(".kmp-mode").textContent = (i.mode === "ia" ? "Asistente con IA" : "Modo demo") + " · disponibilidad y precios reales" + (serverTTS ? " · voz natural" : "");
     const foto = i.destino && i.destino.foto;
     if (foto) {
