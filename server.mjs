@@ -268,6 +268,21 @@ function paraVoz(t) {
     .trim();
 }
 
+// Voz → texto (ElevenLabs Scribe). Se usa en iPhone, donde el dictado del navegador falla tras la primera vez.
+async function stt(audio, tipo) {
+  if (!ELEVEN_KEY) throw new Error("STT no configurado");
+  const ext = /mpeg|mp3/.test(tipo) ? "mp3" : /mp4|m4a|aac/.test(tipo) ? "m4a" : /ogg/.test(tipo) ? "ogg" : /wav/.test(tipo) ? "wav" : "webm";
+  const form = new FormData();
+  form.append("model_id", process.env.ELEVENLABS_STT_MODEL || "scribe_v1");
+  form.append("language_code", "spa");
+  form.append("tag_audio_events", "false");
+  form.append("file", new Blob([audio], { type: tipo.split(";")[0] }), "voz." + ext);
+  const r = await fetch("https://api.elevenlabs.io/v1/speech-to-text", { method: "POST", headers: { "xi-api-key": ELEVEN_KEY }, body: form });
+  if (!r.ok) throw new Error(`ElevenLabs STT ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  const j = await r.json();
+  return String(j.text || "").trim();
+}
+
 async function tts(text) {
   if (!ELEVEN_KEY) throw new Error("TTS no configurado");
   const clean = paraVoz(text).slice(0, 1200);
@@ -305,7 +320,16 @@ http
         res.writeHead(200, { "content-type": "application/json" });
         let destino = null;
         try { const dd = await getDestino(); destino = { nombre: dd.nombre, foto: dd.foto, fotos: dd.fotos.slice(0, 6) }; } catch {}
-        return res.end(JSON.stringify({ mode: API_KEY && iaEstado !== "sin_saldo" && iaEstado !== "error" ? "ia" : "demo", ia: iaEstado, model: API_KEY ? MODEL : null, tts: ELEVEN_KEY ? "elevenlabs" : "browser", destino }));
+        return res.end(JSON.stringify({ mode: API_KEY && iaEstado !== "sin_saldo" && iaEstado !== "error" ? "ia" : "demo", ia: iaEstado, model: API_KEY ? MODEL : null, tts: ELEVEN_KEY ? "elevenlabs" : "browser", stt: ELEVEN_KEY ? "elevenlabs" : "navegador", destino }));
+      }
+      if (req.method === "POST" && req.url.startsWith("/api/stt")) {
+        if (sumar(contadores().voz, ipDe(req)) > LIM.vocesPorIpDia) { res.writeHead(429); return res.end(); }
+        const partes = [];
+        let total = 0;
+        for await (const c of req) { total += c.length; if (total > 6e6) throw new Error("audio demasiado grande"); partes.push(c); }
+        const texto = await stt(Buffer.concat(partes), req.headers["content-type"] || "audio/webm");
+        res.writeHead(200, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ text: texto }));
       }
       if (req.method === "POST" && req.url === "/api/tts") {
         let raw = "";
