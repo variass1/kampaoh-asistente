@@ -209,7 +209,7 @@
     tree: svg('<path d="M12 2l5 7h-3l4 6H6l4-6H7l5-7z"/><path d="M12 15v7"/>', 18),
     // marca de Kampi: dos "picos" como en el logo de Kampaoh
     // Símbolo de Kampaoh (redibujado en vector a partir del logo): pico, onda y rombo
-    kampi: '<svg viewBox="0 0 100 100" fill="none" stroke="#000" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"><path d="M23 45L50 18L77 45"/><path d="M8 57L21 69L50 43L79 69L92 57"/><path d="M50 69L58 77L50 85L42 77Z" fill="#000" stroke-width="6"/></svg>',
+    kampi: '<svg viewBox="0 0 100 100" fill="none" stroke="#000" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"><path d="M20 47L50 16L80 47"/><path d="M6 57L20 72L50 42L80 72L94 57"/><path d="M50 67L60 77L50 87L40 77Z" fill="#000" stroke-width="5"/></svg>',
   };
 
   const style = document.createElement("style");
