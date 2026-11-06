@@ -46,6 +46,23 @@ Una sola línea en cualquier página:
 | `conocimiento/cordoba.md` | Información del destino validada por el equipo (prioridad sobre el CMS) |
 | `public/widget.js` | El asistente: chat, tarjetas, galería, voz y checkout |
 
+## Publicarlo (Render)
+
+1. En [render.com](https://render.com): **New → Web Service** y elige este repositorio.
+2. Runtime **Node**, Build command vacío, Start command `npm start`, plan **Free**.
+3. En **Environment** añade `ANTHROPIC_API_KEY` y `ELEVENLABS_API_KEY` (opcionales).
+
+### Límites para un enlace público
+
+Para que nadie gaste el saldo de IA, se pueden cambiar con variables de entorno:
+
+| Variable | Por defecto | Qué limita |
+|---|---|---|
+| `LIMITE_GASTO_DIA_USD` | 2 | Gasto máximo de IA al día; después pasa a modo demo |
+| `LIMITE_MENSAJES_IP_DIA` | 60 | Mensajes con IA por persona (IP) al día |
+| `LIMITE_MENSAJES_CONVERSACION` | 40 | Mensajes por conversación |
+| `LIMITE_VOZ_IP_DIA` | 80 | Respuestas con voz natural por persona al día |
+
 ## Coste aproximado
 
 Con Claude Sonnet 5.5 y caché: unos 1,5 céntimos por mensaje (≈0,09 $ una conversación completa con reserva).

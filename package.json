@@ -1,0 +1,14 @@
+{
+  "name": "kampaoh-asistente",
+  "version": "1.0.0",
+  "description": "Kampi: asistente con IA y voz para reservar en Kampaoh Córdoba (demo)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --env-file-if-exists=.env server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

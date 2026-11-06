@@ -130,6 +130,7 @@ async function callClaude(messages) {
   const u = j.usage || {};
   const usd = ((u.input_tokens || 0) * 2 + (u.output_tokens || 0) * 10 + (u.cache_read_input_tokens || 0) * 0.2 + (u.cache_creation_input_tokens || 0) * 2.5) / 1e6;
   costeTotal += usd;
+  contadores().gasto += usd;
   console.log(`[uso] in=${u.input_tokens} cache_leida=${u.cache_read_input_tokens || 0} cache_escrita=${u.cache_creation_input_tokens || 0} out=${u.output_tokens} → ${usd.toFixed(4)} $ (acumulado ${costeTotal.toFixed(3)} $)`);
   return j;
 }
@@ -186,19 +187,40 @@ const guardarSesiones = () => {
 };
 let iaEstado = API_KEY ? "pendiente" : "sin_clave";
 
-async function handleChat({ sessionId, message }) {
+async function handleChat({ sessionId, message }, ip) {
+  sessionId = String(sessionId || "").slice(0, 64) || "anon";
+  message = String(message || "").slice(0, LIM.largoMensaje);
   const s = sessions.get(sessionId) || { history: [], demo: {} };
   sessions.set(sessionId, s);
   s.at = Date.now();
   try {
-    return await responderChat(s, message);
+    return await responderChat(s, message, ip);
   } finally {
     guardarSesiones();
   }
 }
 
-async function responderChat(s, message) {
-  if (API_KEY) {
+// ---------- Límites para un enlace público (protegen el saldo de IA y voz) ----------
+const LIM = {
+  mensajesPorConversacion: Number(process.env.LIMITE_MENSAJES_CONVERSACION || 40),
+  mensajesIaPorIpDia: Number(process.env.LIMITE_MENSAJES_IP_DIA || 60),
+  gastoMaxDiaUsd: Number(process.env.LIMITE_GASTO_DIA_USD || 2),
+  vocesPorIpDia: Number(process.env.LIMITE_VOZ_IP_DIA || 80),
+  largoMensaje: 600,
+};
+const hoyStr = () => new Date().toISOString().slice(0, 10);
+let dia = { fecha: hoyStr(), gasto: 0, ia: new Map(), voz: new Map() };
+const contadores = () => { if (dia.fecha !== hoyStr()) dia = { fecha: hoyStr(), gasto: 0, ia: new Map(), voz: new Map() }; return dia; };
+const sumar = (mapa, ip) => { const n = (mapa.get(ip) || 0) + 1; mapa.set(ip, n); return n; };
+
+async function responderChat(s, message, ip = "?") {
+  s.n = (s.n || 0) + 1;
+  if (s.n > LIM.mensajesPorConversacion)
+    return { text: "Hemos hablado mucho en esta conversación 😊. Para seguir, recarga la página o reserva directamente en booking.kampaoh.com.", events: [], mode: "limite" };
+  const c = contadores();
+  const iaPermitida = API_KEY && c.gasto < LIM.gastoMaxDiaUsd && sumar(c.ia, ip) <= LIM.mensajesIaPorIpDia;
+  if (API_KEY && !iaPermitida) console.log(`[límite] IA desactivada para ${ip} (gasto hoy ${c.gasto.toFixed(2)} $)`);
+  if (iaPermitida) {
     try {
       const { text, events, messages } = await aiReply([...s.history, { role: "user", content: message }]);
       s.history = messages;
@@ -263,6 +285,9 @@ async function tts(text) {
   return Buffer.from(await r.arrayBuffer());
 }
 
+// IP real del visitante (Render y otros servicios la pasan en x-forwarded-for)
+const ipDe = (req) => String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "?").split(",")[0].trim();
+
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png" };
 
 http
@@ -271,7 +296,8 @@ http
       if (req.method === "POST" && req.url === "/api/chat") {
         let raw = "";
         for await (const c of req) raw += c;
-        const out = await handleChat(JSON.parse(raw));
+        if (raw.length > 5000) throw new Error("petición demasiado grande");
+        const out = await handleChat(JSON.parse(raw), ipDe(req));
         res.writeHead(200, { "content-type": "application/json" });
         return res.end(JSON.stringify(out));
       }
@@ -282,6 +308,7 @@ http
       if (req.method === "POST" && req.url === "/api/tts") {
         let raw = "";
         for await (const c of req) raw += c;
+        if (sumar(contadores().voz, ipDe(req)) > LIM.vocesPorIpDia) { res.writeHead(429); return res.end(); }
         const audio = await tts(JSON.parse(raw).text);
         res.writeHead(200, { "content-type": "audio/mpeg", "cache-control": "no-store" });
         return res.end(audio);
