@@ -320,7 +320,8 @@ http
       if (path === "/") path = "/index.html";
       if (path.includes("..")) throw new Error("bad path");
       const file = await readFile(join(PUBLIC, path));
-      res.writeHead(200, { "content-type": MIME[extname(path)] || "application/octet-stream" });
+      const ext = extname(path);
+      res.writeHead(200, { "content-type": MIME[ext] || "application/octet-stream", "cache-control": ext === ".html" || ext === ".js" ? "no-cache" : "public, max-age=3600" });
       res.end(file);
     } catch (e) {
       console.error(e.message);
